@@ -1,0 +1,16 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcgi_stdio.h>
+
+int main()
+{
+        int count;
+        count = 0;
+
+        while (FCGI_Accept() >= 0)
+        {
+                printf("Content-type:application/json\r\n\r\n");
+                printf("{\"retcode\":0, \"request\":{\"id\":%d, \"count\":%d}}", getpid(), count++);
+        }
+        return 0;
+}
