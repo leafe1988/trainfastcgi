@@ -92,10 +92,26 @@ void testManager()
 }
 int test()
 {
-	testManager();
+	//testManager();
 	InitTestSignalData();
-	std::string VersionJson = GetVersionJson();
-	printf("GetVersionJson is %s\r\n", VersionJson.c_str());
-
+	std::string sssss;
+	sssss = GetParamsJson(sssss);
+	sssss = GetHomePageJson(sssss);
+	//std::string VersionJson = GetVersionJson();
+	//printf("GetVersionJson is %s\r\n", VersionJson.c_str());
+	Json::Value jsonRoot;
+	//jsonRoot["username"] = "leafe1222";
+	//jsonRoot["password"] = "111111";
+	//ForgetPasswd(jsonRoot.toStyledString());
+	jsonRoot["id"] = "WheelDiameter3";
+	jsonRoot["direction"] = 0;
+	ChangeVariable(jsonRoot.toStyledString());
+	std::string ss = InitMenusJson();
+	InitRoleSetttingJson();
+	Json::Value jsonRole;
+	jsonRole["roleId"] = "2";
+	jsonRole["menus"] = "1,2,3,4,5,6";
+	UpdateRoleRuleSettingJson(jsonRole.toStyledString());
+	ss = GetMenus(ss);
 	return 0;
 }
