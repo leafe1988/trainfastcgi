@@ -2,7 +2,7 @@
 
 #include <cstring>
 #include <vector>
-
+#include <algorithm>
 namespace WebService {
 
 //________________________________________________________________________
