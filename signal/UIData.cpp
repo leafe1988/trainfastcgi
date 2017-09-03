@@ -3,77 +3,384 @@
 #include "json\json.h"
 #include <iostream>
 #include <fstream>
-#include <vector>
-CUIData::CUIData()
-{
-}
 
-CUIData::~CUIData()
-{
-}
-
-
-std::string GetHomePageJson(std::string& strParameter)
-{
-	Json::Value root;  // 表示整个 json 对象
-
-	/*****************common 通用信息 *********************/
-	////设备序列号 
-	//root["common"]["deviseNumber"] = Json::Value("2323233");
-	////软件版本号 
-	//root["common"]["softVersion"] = Json::Value("2323233");
-	////设备型号
-	//root["common"]["deviceModel"] = Json::Value("2323233");
-	////配置版本号
-	//root["common"]["configVersion"] = Json::Value("2323233");
-
-	const char* tab[][3] = {
-		{ "common", "deviseNumber", "SerialNumber" },
-		{ "common", "softVersion", "AppSoftwareVersion" },
-		{ "common", "deviceModel", "ProductType" }
+namespace UiService{
+	enum VariablesAct
+	{
+		Variablesdel = 0,
+		Variablesadd
 	};
+	//1：忘记密码 URL：account/forget (api/account/forget.json)
+	std::string ForgetPasswd(const std::string& strParameter)
+	{
+		std::string strJson;
+		Json::Reader jsonReader;
+		Json::Value jsonRoot;
+		//check Parameter json formart
+		if (!jsonReader.parse(strParameter, jsonRoot))
+			return strJson;
+		if (!jsonRoot.isMember("username") || !jsonRoot.isMember("password"))
+			return strJson;
+
+		std::ifstream fin;
+		fin.open(FILE_LOCAL_USERINFO);
+		Json::Reader reader;
+		Json::Value  root;
+		//如果文件不存在
+		if (!fin)
+			root["userinfo"].append(jsonRoot);
+		else
+		{
+			if (!reader.parse(fin, root, false))
+			{
+				fin.close();
+				return strJson;
+			}
+			const Json::Value arrayObj = root["userinfo"];
+			for (unsigned int i = 0; i < arrayObj.size(); i++)
+			{
+				if (arrayObj[i]["username"].asString() == jsonRoot["username"].asString())
+					root["userinfo"][i]["password"] = jsonRoot["password"].asString();
+				else if (i == arrayObj.size() - 1)
+					root["userinfo"].append(jsonRoot);
+			}
+		}
+		fin.close();
+		strJson = root.toStyledString();
+		std::ofstream ofs;
+		ofs.open(FILE_LOCAL_USERINFO);
+		ofs << strJson;
+		ofs.close();
+		return strJson;
+	}
+
+	//2：登录 URL：account/login (api/account/login.json)
+	std::string LoginSystem(const std::string& strParameter)
+	{
+		std::string strJson;
+		Json::Reader jsonReader;
+		Json::Value jsonRoot;
+		bool bLoginSuccess = false;
+		//check Parameter json formart
+		if (!jsonReader.parse(strParameter, jsonRoot))
+			return strJson;
+		if (!jsonRoot.isMember("username") || !jsonRoot.isMember("password"))
+			return strJson;
+
+		std::ifstream fin;
+		fin.open(FILE_LOCAL_USERINFO);
+		Json::Reader reader;
+		Json::Value  root;
+		//如果文件不存在
+		if (!fin)
+		{
+			root["userinfo"].append(jsonRoot);
+			strJson = root.toStyledString();
+			std::ofstream ofs;
+			ofs.open(FILE_LOCAL_USERINFO);
+			ofs << strJson;
+			ofs.close();
+		}
+		else
+		{
+			if (!reader.parse(fin, root, false))
+			{
+				fin.close();
+				return strJson;
+			}
+			const Json::Value arrayObj = root["userinfo"];
+			for (unsigned int i = 0; i < arrayObj.size(); i++)
+			{
+				if (arrayObj[i]["username"].asString() == jsonRoot["username"].asString() &&
+					root["userinfo"][i]["password"] == jsonRoot["password"].asString())
+				{
+					//登陆成功
+					bLoginSuccess = true;
+				}
+			}
+		}
+		fin.close();
+		return strJson;
+	}
+
+	//3:更改变量 URL：page/changeVariable (api/page/changeVariable.json)
+	std::string ChangeVariable(const std::string& strParameter)
+	{
+		std::string strJson;
+		Json::Reader jsonReader;
+		Json::Value jsonRoot;
+		//check Parameter json formart
+		if (!jsonReader.parse(strParameter, jsonRoot))
+			return strJson;
+		if (!jsonRoot.isMember("name") || !jsonRoot.isMember("direction"))
+			return strJson;
+
+		std::ifstream fin;
+		fin.open(FILE_LOCAL_VARIABLES);
+		Json::Reader reader;
+		Json::Value  root;
+		//如果文件不存在
+		if (!fin)
+		{
+			if (jsonRoot["direction"].asInt() == VariablesAct::Variablesadd)
+			{
+				Json::Value jsontmp;
+				jsontmp["name"] = jsonRoot["name"].asString();
+				root["Variable"].append(jsontmp);
+			}
+			else
+				return strJson;
+		}
+		else
+		{
+			if (!reader.parse(fin, root, false))
+			{
+				fin.close();
+				return strJson;
+			}
+			const Json::Value arrayObj = root["Variable"];
+			for (unsigned int i = 0; i < arrayObj.size(); i++)
+			{
+				if (arrayObj[i]["name"].asString() == jsonRoot["name"].asString()){
+					if (jsonRoot["direction"].asInt() == VariablesAct::Variablesdel){
+						root["Variable"][i].removeMember("id");
+						root["Variable"][i].removeMember("direction");
+					}
+
+				}
+				else if (i == arrayObj.size() - 1)
+				{
+					if (jsonRoot["direction"].asInt() == VariablesAct::Variablesadd){
+						Json::Value jsontmp;
+						jsontmp["name"] = jsonRoot["name"].asString();
+						root["Variable"].append(jsontmp);
+					}
+				}
+			}
+		}
+		fin.close();
+		strJson = root.toStyledString();
+		std::ofstream ofs;
+		ofs.open(FILE_LOCAL_VARIABLES);
+		ofs << strJson;
+		ofs.close();
+		return strJson;
+
+	}
+
+	//7:获取首页数据 /api/page/getHome.json
+	std::string GetHomePageJson(const std::string& strParameter)
+	{
+		Json::Value root;  // 表示整个 json 对象
+		const char* tab[][3] = {
+			{ "common", "deviseNumber", "SerialNumber" },
+			{ "common", "softVersion", "AppSoftwareVersion" },
+			{ "common", "deviceModel", "ProductType" }
+		};
 
 #define Product_setValue(root, i) {\
 	root[i[0]][i[1]] = Json::Value(GetSignalString("Product Infomation Group", i[2])); \
-	}
+		}
 
-	for (auto& i : tab){
-		Product_setValue(root, i);
-	}
+		for (auto& i : tab){
+			Product_setValue(root, i);
+		}
 
-	const char* tabPruduct[][3] = {
-		{ "common", "configVersion", "ConfigVersion" },
-		{ "record", "workStatus", "BootloaderVersion" },
-		{ "record", "systemTime", "CurrentSystemTime" },
-		{ "record", "dayMileage", "CurrentMileage" },
-		{ "record", "totalMileage", "TotalMileage" },
-		{ "record", "workDuration", "TotalRunTime" },
-	};
+		const char* tabPruduct[][3] = {
+			{ "common", "configVersion", "ConfigVersion" },
+			{ "record", "workStatus", "BootloaderVersion" },
+			{ "record", "systemTime", "CurrentSystemTime" },
+			{ "record", "dayMileage", "CurrentMileage" },
+			{ "record", "totalMileage", "TotalMileage" },
+			{ "record", "workDuration", "TotalRunTime" },
+		};
 
 #define Pruduct_setValue(root, i) {\
 	root[i[0]][i[1]] = Json::Value(GetSignalString("Pruduct State Group", i[2])); \
+		}
+
+		for (auto& i : tabPruduct){
+			Pruduct_setValue(root, i);
+		}
+		std::string s = root.toStyledString();
+		/*****************storage 存储器状态 *********************/
+		//数据存储
+		root["storage"]["type"] = Json::Value(22222);
+		//总容量，含单位
+		root["storage"]["totalCapacity"] = Json::Value(22222);
+		//剩余容量，含单位 
+		root["storage"]["limitCapacity"] = Json::Value(22222);
+		//剩余百分比
+		root["storage"]["percent"] = Json::Value(22222);
+		//冻结容量，含单位
+		root["storage"]["freezeCapacity"] = Json::Value(22222);
+		//状态
+		root["storage"]["status"] = Json::Value(22222);
+
+		return root.toStyledString();
 	}
 
-	for (auto& i : tabPruduct){
-		Pruduct_setValue(root, i);
-	}
-	std::string s = root.toStyledString();
-	/*****************storage 存储器状态 *********************/
-	//数据存储
-	root["storage"]["type"] = Json::Value(22222);
-	//总容量，含单位
-	root["storage"]["totalCapacity"] = Json::Value(22222);
-	//剩余容量，含单位 
-	root["storage"]["limitCapacity"] = Json::Value(22222);
-	//剩余百分比
-	root["storage"]["percent"] = Json::Value(22222);
-	//冻结容量，含单位
-	root["storage"]["freezeCapacity"] = Json::Value(22222);
-	//状态
-	root["storage"]["status"] = Json::Value(22222);
+	//10:获取参数页数据 page/getParams (api/page/getParams.json)
+	std::string GetParamsJson(const std::string& strParameter)
+	{
+		Json::Value root;
+		const char* tab[][2] = {
+			{ "vehicleType", "VehicleType" },
+			{ "vehicleNumber", "VehicleNumber" },
+			{ "trainNumber", "TrainNumber" },
+			{ "diameter1", "WheelDiameter1" },
+			{ "diameter2", "WheelDiameter2" },
+			{ "pulses1", "PulseEncode1" },
+			{ "pulses2", "PulseEncode2" },
+		};
 
-	return root.toStyledString();
+#define Params_setValue(root, i) {\
+	root[i[0]] = Json::Value(GetSignalString("Parameter Infomation Group", i[1])); \
+		}
+		for (auto& i : tab){
+			Params_setValue(root, i);
+		}
+		return root.toStyledString();
+	}
+
+	//11:获取监控页的选择变量数据 pURL：page/getRealVariables (api/page/getRealVariables.json)
+	std::string GetVariableArrayJson(const std::string& strParameter)
+	{
+		std::string strFilePath = FILE_LOCAL_VARIABLES;
+		return GetFileJsonData(strFilePath);
+	}
+
+	//12:获取设置页面数据 page/getSetting (api/page/getSetting.json)
+	std::string GetRoles(const std::string & strParameter)
+	{
+		std::string strFilePath = FILE_LOCAL_ROLES;
+		return GetFileJsonData(strFilePath);
+	}
+
+	//14：获取版本信息  page/getVersion (api/page/getVersion.json)
+	std::string  GetVersionJson(const std::string& strParameter)
+	{
+		Json::Value root;
+
+		const char* tab[][3] = {
+			{ "software", "systemVersion", "SystemSoftwareVersion" },
+			{ "software", "appVersion", "AppSoftwareVersion" },
+			{ "software", "firmwareVersion", "CommFirmwareVersion" },
+			{ "software", "ioVersion", "IOBoardFirmwareVersion" },
+			{ "software", "bootVersion", "BootloaderVersion" },
+			{ "hardware", "boardVersion", "MainBoardHardwareVersion" },
+			{ "hardware", "ioVersion", "IOBoardHardwareVersion" },
+			{ "hardware", "commVersion", "CommBoardHardwareVersion" },
+			{ "device", "productionDate", "ManufactureDataTime" },
+		};
+
+#define version_setValue(root, i) {\
+	root[i[0]][i[1]] = Json::Value(GetSignalString("Product Infomation Group", i[2])); \
+		}
+
+		for (auto& i : tab){
+			version_setValue(root, i);
+		}
+
+		std::ofstream ofs;
+		ofs.open("d:\\test1.json");
+		ofs << root.toStyledString();
+		ofs.close();
+		return root.toStyledString();
+	}
+
+	//16：设置权限 page/updatePermission (api/page/updatePermission.json)
+	std::string  UpdateRoleRuleSettingJson(const std::string & strParameter)
+	{
+		std::string strJson;
+		Json::Reader jsonReader;
+		Json::Value jsonRoot;
+		//check Parameter json formart
+		if (!jsonReader.parse(strParameter, jsonRoot))
+			return strJson;
+		if (!jsonRoot.isMember("roleId") || !jsonRoot.isMember("menus"))
+			return strJson;
+#define SPL_FLAG ","
+		std::string strRoleMenus = jsonRoot["menus"].asString();
+		std::vector<std::string>vMenus = SpiltString(strRoleMenus, strRoleMenus.size(), SPL_FLAG);
+		std::ifstream fin;
+		fin.open(FILE_LOCAL_ROLES);
+		Json::Reader reader;
+		Json::Value  root;
+		if (!fin)
+		{
+			strJson = InitRoleSetttingJson();
+			reader.parse(strJson.c_str(), root);
+		}
+		else if (!reader.parse(fin, root, false))
+		{
+			fin.close();
+			return strJson;
+		}
+		for (size_t i = 0; i < root.size(); i++)
+		{
+			if (root[i]["roleId"].asString() == jsonRoot["roleId"].asString())
+			{
+				const Json::Value arrayObj = root[i]["menus"];
+				for (size_t j = 0; j < arrayObj.size(); j++)
+				{
+					//需要进行分割菜单的字符串 以逗号分割
+					for (auto&menu : vMenus)
+					{
+						if (arrayObj[i]["menuId"].asString() == menu)
+						{
+							root[i]["menus"][j]["isChecked"] = "1";
+							break;
+						}
+					}
+				}
+			}
+		}
+		strJson = root.toStyledString();
+		std::ofstream ofs;
+		ofs.open(FILE_LOCAL_ROLES);
+		ofs << strJson;
+		ofs.close();
+		return strJson;
+	}
+
+	//17：更新车辆类型 page/updateVehicle (api/page/updateVehicle.json)
+	std::string UpdateupdateVehicleJson(const std::string & strParameter)
+	{
+		std::string strJson;
+		Json::Reader jsonReader;
+		Json::Value jsonRoot;
+		//check Parameter json formart
+		if (!jsonReader.parse(strParameter, jsonRoot))
+			return strJson;
+		const char* tab[][2] = {
+			{ "vehicleType", "VehicleType" },
+			{ "vehicleNumber", "VehicleNumber" },
+			{ "trainNumber", "TrainNumber" },
+			{ "diameter1", "WheelDiameter1" },
+			{ "diameter2", "WheelDiameter2" },
+			{ "pulses1", "PulseEncode1" },
+			{ "pulses2", "PulseEncode2" },
+		};
+		for (auto&i : tab)
+		{
+			if (jsonRoot.isMember(i[0]))
+			{
+				SetSignalString("Parameter Infomation Group", i[1], jsonRoot[i[0]].asString());
+			}
+		}
+		return strJson;
+	}
+
+	//18：获取菜单 system/getMenus (api/system/getMenus.json)
+	std::string GetMenus(const std::string & strParameter)
+	{
+		std::string strFilePath = FILE_LOCAL_MENUS;
+		return GetFileJsonData(strFilePath);
+	}
+
 }
+
 
 //获取维护页数据
 std::string GetMaintainJson()
@@ -120,73 +427,6 @@ std::string GetMessagesArrayJson()
 	Message["lastTime"] = Json::Value("2323233");
 	root.append(Message);
 
-	return root.toStyledString();
-}
-
-//获取参数页数据
-std::string GetParamsJson(std::string& strParameter)
-{
-	Json::Value root; 
-	const char* tab[][2] = {
-		{"vehicleType", "VehicleType" },
-		{  "vehicleNumber", "VehicleNumber" },
-		{ "trainNumber", "TrainNumber" },
-		{ "diameter1", "WheelDiameter1" },
-		{ "diameter2", "WheelDiameter2" },
-		{ "pulses1", "PulseEncode1" },
-		{  "pulses2", "PulseEncode2" },
-	};
-
-#define Params_setValue(root, i) {\
-	root[i[0]] = Json::Value(GetSignalString("Parameter Infomation Group", i[1])); \
-	}
-	for (auto& i : tab){
-		Params_setValue(root, i);
-	}
-	return root.toStyledString();
-}
-
-//获取监控页的选择变量数据 page/getVariables (api/page/getVariables.json)
-std::string GetVariableArrayJson(std::string& strParameter)
-{
-	std::string strFilePath = FILE_LOCAL_VARIABLES;
-	return GetFileJsonData(strFilePath);
-}
-
-
-#define ProductGroupSignalValue(name) {\
-	Json::Value(GetSignalString("Product Infomation Group", name)) \
-}
-
-//获取版本信息 page/getVersion (api/page/getVersion.json)
-std::string  GetVersionJson()
-{
-	Json::Value root;
-
-	const char* tab[][3] = {
-		{ "software", "systemVersion", "SystemSoftwareVersion" },
-		{ "software", "appVersion", "AppSoftwareVersion" },
-		{ "software", "firmwareVersion", "CommFirmwareVersion" },
-		{ "software", "ioVersion", "IOBoardFirmwareVersion" },
-		{ "software", "bootVersion", "BootloaderVersion" },
-		{ "hardware", "boardVersion", "MainBoardHardwareVersion" },
-		{ "hardware", "ioVersion", "IOBoardHardwareVersion" },
-		{ "hardware", "commVersion", "CommBoardHardwareVersion" },
-		{ "device", "productionDate", "ManufactureDataTime" },
-	};
-
-#define version_setValue(root, i) {\
-	root[i[0]][i[1]] = Json::Value(GetSignalString("Product Infomation Group", i[2])); \
-	}
-
-	for (auto& i : tab){
-		version_setValue(root, i);
-	}
-
-	std::ofstream ofs;
-	ofs.open("d:\\test1.json");
-	ofs << root.toStyledString();
-	ofs.close();
 	return root.toStyledString();
 }
 
@@ -262,177 +502,7 @@ void InitTestSignalData()
 			SetSignalString(i[0], i[1], i[2]);
 		}
 }
-//本地保存的用户名密码路径
-#define FILE_LOCAL_USERINFO "d:\\userinfo.dat"
-std::string ForgetPasswd(std::string& strParameter)
-{
-	std::string strJson;
-	Json::Reader jsonReader;
-	Json::Value jsonRoot;
-	//check Parameter json formart
-	if (!jsonReader.parse(strParameter, jsonRoot))
-		return strJson;
-	if (!jsonRoot.isMember("username") || !jsonRoot.isMember("password"))
-		return strJson;
 
-	std::ifstream fin;
-	fin.open(FILE_LOCAL_USERINFO);
-	Json::Reader reader;
-	Json::Value  root;
-	//如果文件不存在
-	if (!fin)
-		root["userinfo"].append(jsonRoot);
-	else
-	{
-		if (!reader.parse(fin, root, false))
-		{
-			fin.close();
-			return strJson;
-		}
-		const Json::Value arrayObj = root["userinfo"];
-		for (unsigned int i = 0; i < arrayObj.size(); i++)
-		{
-			if (arrayObj[i]["username"].asString() == jsonRoot["username"].asString())
-				root["userinfo"][i]["password"] = jsonRoot["password"].asString();
-			else if (i == arrayObj.size() - 1)
-				root["userinfo"].append(jsonRoot);
-		}
-	}
-	fin.close();
-	strJson = root.toStyledString();
-	std::ofstream ofs;
-	ofs.open(FILE_LOCAL_USERINFO);
-	ofs << strJson;
-	ofs.close();
-	return strJson;
-}
-
-std::string LoginSystem(std::string& strParameter)
-{
-	std::string strJson;
-	Json::Reader jsonReader;
-	Json::Value jsonRoot;
-	bool bLoginSuccess = false;
-	//check Parameter json formart
-	if (!jsonReader.parse(strParameter, jsonRoot))
-		return strJson;
-	if (!jsonRoot.isMember("username") || !jsonRoot.isMember("password"))
-		return strJson;
-
-	std::ifstream fin;
-	fin.open(FILE_LOCAL_USERINFO);
-	Json::Reader reader;
-	Json::Value  root;
-	//如果文件不存在
-	if (!fin)
-	{
-		root["userinfo"].append(jsonRoot);
-		strJson = root.toStyledString();
-		std::ofstream ofs;
-		ofs.open(FILE_LOCAL_USERINFO);
-		ofs << strJson;
-		ofs.close();
-	}
-	else
-	{
-		if (!reader.parse(fin, root, false))
-		{
-			fin.close();
-			return strJson;
-		}
-		const Json::Value arrayObj = root["userinfo"];
-		for (unsigned int i = 0; i < arrayObj.size(); i++)
-		{
-			if (arrayObj[i]["username"].asString() == jsonRoot["username"].asString() &&
-				root["userinfo"][i]["password"] == jsonRoot["password"].asString())
-			{
-				//登陆成功
-				bLoginSuccess = true;
-			}
-		}
-	}
-	fin.close();
-	return strJson;
-}
-
-enum VariablesAct
-{
-	Variablesdel = 0,
-	Variablesadd
-};
-
-std::string ChangeVariable(std::string& strParameter)
-{
-	std::string strJson;
-	Json::Reader jsonReader;
-	Json::Value jsonRoot;
-	//check Parameter json formart
-	if (!jsonReader.parse(strParameter, jsonRoot))
-		return strJson;
-	if (!jsonRoot.isMember("name") || !jsonRoot.isMember("direction"))
-		return strJson;
-
-	std::ifstream fin;
-	fin.open(FILE_LOCAL_VARIABLES);
-	Json::Reader reader;
-	Json::Value  root;
-	//如果文件不存在
-	if (!fin )
-	{
-		if (jsonRoot["direction"].asInt() == VariablesAct::Variablesadd)
-		{
-			Json::Value jsontmp;
-			jsontmp["name"] = jsonRoot["name"].asString();
-			root["Variable"].append(jsontmp);
-		}
-		else 
-			return strJson;
-	}
-	else
-	{
-		if (!reader.parse(fin, root, false))
-		{
-			fin.close();
-			return strJson;
-		}
-		const Json::Value arrayObj = root["Variable"];
-		for (unsigned int i = 0; i < arrayObj.size(); i++)
-		{
-			if (arrayObj[i]["name"].asString() == jsonRoot["name"].asString()){
-				if (jsonRoot["direction"].asInt() == VariablesAct::Variablesdel){
-					root["Variable"][i].removeMember("id");
-					root["Variable"][i].removeMember("direction");
-				}
-			
-			}
-			else if (i == arrayObj.size() - 1)
-			{
-				if (jsonRoot["direction"].asInt() == VariablesAct::Variablesadd){
-					Json::Value jsontmp;
-					jsontmp["name"] = jsonRoot["name"].asString();
-					root["Variable"].append(jsontmp);
-				}
-			}
-		}
-	}
-	fin.close();
-	strJson = root.toStyledString();
-	std::ofstream ofs;
-	ofs.open(FILE_LOCAL_VARIABLES);
-	ofs << strJson;
-	ofs.close();
-	return strJson;
-
-}
-
-//本地保存的用户名密码路径
-#define FILE_LOCAL_MENUS "d:\\menus.dat"
-//获取菜单 system/getMenus (api/system/getMenus.json)
-std::string GetMenus(std::string & strParameter)
-{
-	std::string strFilePath = FILE_LOCAL_MENUS;
-	return GetFileJsonData(strFilePath);
-}
 
 //初始化菜单
 std::string InitMenusJson()
@@ -463,9 +533,7 @@ std::string InitMenusJson()
 }
 
 
-//本地保存的用户名密码路径
-#define FILE_LOCAL_ROLES "d:\\roles.dat"
-//初始化菜单
+//初始化角色
 std::string InitRoleSetttingJson()
 {
 	std::string strJson;
@@ -519,13 +587,6 @@ std::string InitRoleSetttingJson()
 	return strJson;
 }
 
-//获取设置页面数据 page/getSetting (api/page/getSetting.json)
-std::string GetRoles(std::string & strParameter)
-{
-	std::string strFilePath = FILE_LOCAL_ROLES;
-	return GetFileJsonData(strFilePath);
-}
-
 
 std::vector<std::string>SpiltString(std::string strSrc, int nLen, std::string strFlag)
 {
@@ -551,63 +612,9 @@ std::vector<std::string>SpiltString(std::string strSrc, int nLen, std::string st
 	return rest;
 }
 
-std::string UpdateRoleRuleSettingJson(std::string & strParameter)
-{
-	std::string strJson;
-	Json::Reader jsonReader;
-	Json::Value jsonRoot;
-	//check Parameter json formart
-	if (!jsonReader.parse(strParameter, jsonRoot))
-		return strJson;
-	if (!jsonRoot.isMember("roleId") || !jsonRoot.isMember("menus"))
-		return strJson;
-#define SPL_FLAG ","
-	std::string strRoleMenus = jsonRoot["menus"].asString();
-	std::vector<std::string>vMenus = SpiltString(strRoleMenus, strRoleMenus.size(), SPL_FLAG);
-	std::ifstream fin;
-	fin.open(FILE_LOCAL_ROLES);
-	Json::Reader reader;
-	Json::Value  root;
-	if (!fin)
-	{
-		strJson = InitRoleSetttingJson();
-		reader.parse(strJson.c_str(), root);
-	}
-	else if (!reader.parse(fin, root, false))
-	{
-		fin.close();
-		return strJson;
-	}
-	for (size_t i = 0; i < root.size(); i++)
-	{
-		if (root[i]["roleId"].asString() == jsonRoot["roleId"].asString())
-		{
-			const Json::Value arrayObj = root[i]["menus"];
-			for (size_t j = 0; j < arrayObj.size(); j++)
-			{
-				//需要进行分割菜单的字符串 以逗号分割
-				for (auto&menu : vMenus)
-				{
-					if (arrayObj[i]["menuId"].asString() == menu)
-					{
-						root[i]["menus"][j]["isChecked"] = "1";
-						break;
-					}
-				}
-			}
-		}
-	}
-	strJson = root.toStyledString();
-	std::ofstream ofs;
-	ofs.open(FILE_LOCAL_ROLES);
-	ofs << strJson;
-	ofs.close();
-	return strJson;
-
-}
 
 //获取文件内容的json
-std::string GetFileJsonData(std::string& strFilePath)
+std::string GetFileJsonData(const std::string& strFilePath)
 {
 	std::ifstream fin;
 	std::string strJson;
@@ -616,7 +623,7 @@ std::string GetFileJsonData(std::string& strFilePath)
 	Json::Value  root;
 	if (!fin)
 	{
-		strJson = InitRoleSetttingJson();
+		return strJson;// strJson = InitRoleSetttingJson();
 	}
 	else
 	{

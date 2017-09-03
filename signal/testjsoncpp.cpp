@@ -6,6 +6,7 @@
 #include "string"
 #include "signal.h"
 #include "UIData.h"
+#include "FastCgiAction.h"
 #ifdef _DEBUG
 #pragma comment(lib, "json_vc71_libmtd.lib")
 #else
@@ -13,7 +14,7 @@
 #endif
 using namespace std;
 int test();
-
+void testFastMsg();
 int _tmain(int argc, _TCHAR* argv[])
 {
 	test();
@@ -95,8 +96,8 @@ int test()
 	//testManager();
 	InitTestSignalData();
 	std::string sssss;
-	sssss = GetParamsJson(sssss);
-	sssss = GetHomePageJson(sssss);
+	sssss = UiService::GetParamsJson(sssss);
+	sssss = UiService::GetHomePageJson(sssss);
 	//std::string VersionJson = GetVersionJson();
 	//printf("GetVersionJson is %s\r\n", VersionJson.c_str());
 	Json::Value jsonRoot;
@@ -105,13 +106,29 @@ int test()
 	//ForgetPasswd(jsonRoot.toStyledString());
 	jsonRoot["id"] = "WheelDiameter3";
 	jsonRoot["direction"] = 0;
-	ChangeVariable(jsonRoot.toStyledString());
+	UiService::ChangeVariable(jsonRoot.toStyledString());
 	std::string ss = InitMenusJson();
 	InitRoleSetttingJson();
+	//Json::Value jsonRole;
+	//jsonRole["roleId"] = "2";
+	//jsonRole["menus"] = "1,2,3,4,5,6";
+	//UiService::UpdateRoleRuleSettingJson(jsonRole.toStyledString());
+	ss = UiService::GetMenus(ss);
+	testFastMsg();
+	return 0;
+}
+
+void testFastMsg()
+{
+	CFastCgiAction cca;
+	cca.InitMsgProcMap();
+	cca.DisPatchFastCgiMsg("api/system/getMenus.json", "");
 	Json::Value jsonRole;
 	jsonRole["roleId"] = "2";
-	jsonRole["menus"] = "1,2,3,4,5,6";
-	UpdateRoleRuleSettingJson(jsonRole.toStyledString());
-	ss = GetMenus(ss);
-	return 0;
+	jsonRole["menus"] = "1,2,3,4,6";
+	cca.DisPatchFastCgiMsg("api/page/updatePermission.json", jsonRole.toStyledString());
+	/*
+	获取参数 
+
+	*/
 }
